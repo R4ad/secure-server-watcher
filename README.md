@@ -192,7 +192,7 @@ secure-server-watcher/
 Clone the repository:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/secure-server-watcher.git
+git clone https://github.com/R4ad/secure-server-watcher.git
 cd secure-server-watcher
 ```
 
