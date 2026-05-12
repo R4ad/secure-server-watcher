@@ -56,6 +56,15 @@ def get_str_list(key: str, default: str = "") -> list[str]:
 
     return [item.strip() for item in value.split(",") if item.strip()]
 
+def get_path(key: str, default: str) -> Path:
+    value = get_str(key, default)
+    path = Path(value)
+
+    if path.is_absolute():
+        return path
+
+    return BASE_DIR / path
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -69,6 +78,7 @@ class Settings:
     disk_threshold: int
 
     ssh_failed_threshold: int
+    ssh_log_path: Path
 
     allowed_ports: list[int]
     services_to_check: list[str]
@@ -90,7 +100,8 @@ settings = Settings(
     disk_threshold=get_int("DISK_THRESHOLD", 85),
 
     ssh_failed_threshold=get_int("SSH_FAILED_THRESHOLD", 10),
-
+    ssh_log_path=get_path("SSH_LOG_PATH", "/var/log/auth.log"),
+    
     allowed_ports=get_port_list("ALLOWED_PORTS", "22,80,443"),
     services_to_check=get_str_list("SERVICES_TO_CHECK", "ssh,nginx,docker"),
 
