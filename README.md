@@ -378,6 +378,7 @@ ALERT_COOLDOWN_SECONDS=1800
 
 This helps prevent alert spam.
 
+---
 
 ### CHECK_INTERVAL_SECONDS
 
