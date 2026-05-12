@@ -409,6 +409,235 @@ Uptime: 5 days, 3 hours
 ```
 
 ---
+## Usage
+
+Secure Server Watcher can be executed using the `run.sh` script.
+
+Before running the tool, make sure the script is executable:
+
+```bash
+chmod +x run.sh
+```
+
+---
+
+### Run a Single Monitoring Check
+
+Run the watcher once and perform all available checks:
+
+```bash
+./run.sh
+```
+
+This command checks:
+
+- System resources
+- Open ports
+- Configured services
+- SSH authentication logs
+- Telegram alert conditions
+
+---
+
+### Run in Loop Mode
+
+Run the watcher continuously using the interval defined in `.env`:
+
+```bash
+./run.sh --loop
+```
+
+The interval is controlled by:
+
+```env
+CHECK_INTERVAL_SECONDS=60
+```
+
+Example behavior:
+
+```text
+Run check
+Wait 60 seconds
+Run check again
+Wait 60 seconds
+...
+```
+
+To stop loop mode, press:
+
+```text
+Ctrl + C
+```
+
+---
+
+### Send a Test Telegram Alert
+
+Use this command to test whether Telegram alerts are working:
+
+```bash
+./run.sh --test-telegram
+```
+
+Expected output:
+
+```text
+Telegram test alert sent successfully.
+```
+
+If Telegram is unreachable or the configuration is incorrect, the tool will show a safe error message without exposing the bot token.
+
+---
+
+### List Open Ports
+
+Show currently listening ports:
+
+```bash
+./run.sh --list-ports
+```
+
+Example output:
+
+```text
+Listening Ports
+---------------
+- 22 | 0.0.0.0:22 | sshd
+- 80 | 0.0.0.0:80 | nginx
+- 443 | 0.0.0.0:443 | nginx
+```
+
+The watcher compares detected ports with the allowed ports configured in `.env`:
+
+```env
+ALLOWED_PORTS=22,80,443
+```
+
+Unexpected open ports can trigger alerts.
+
+---
+
+### List Configured Services
+
+Check the status of configured services:
+
+```bash
+./run.sh --list-services
+```
+
+Example output on Linux:
+
+```text
+Service Statuses
+----------------
+- ssh: OK (active)
+- nginx: OK (active)
+- docker: OK (active)
+```
+
+On macOS, service checks are skipped because `systemctl` is only available on Linux:
+
+```text
+Service Statuses
+----------------
+- ssh: skipped (Service checking with systemctl is only supported on Linux.)
+- nginx: skipped (Service checking with systemctl is only supported on Linux.)
+- docker: skipped (Service checking with systemctl is only supported on Linux.)
+```
+
+Configured services are defined in `.env`:
+
+```env
+SERVICES_TO_CHECK=ssh,nginx,docker
+```
+
+---
+
+### Analyze SSH Logs
+
+Analyze SSH authentication logs:
+
+```bash
+./run.sh --check-ssh
+```
+
+Example output:
+
+```text
+SSH Status
+----------
+Log Path: /var/log/auth.log
+Failed Attempts: 4
+
+Top Failed IPs:
+- 203.0.113.10: 3
+- 198.51.100.55: 1
+
+Recent Successful Logins:
+- radman from 192.0.2.20 using publickey
+```
+
+If the number of failed SSH attempts reaches the configured threshold, the watcher can send a Telegram alert.
+
+The SSH configuration is controlled by:
+
+```env
+SSH_LOG_PATH=/var/log/auth.log
+SSH_FAILED_THRESHOLD=10
+```
+
+For local development on macOS, a sample log file can be used:
+
+```env
+SSH_LOG_PATH=sample_logs/auth.log
+SSH_FAILED_THRESHOLD=3
+```
+
+---
+
+### Common Commands
+
+```bash
+./run.sh
+./run.sh --loop
+./run.sh --test-telegram
+./run.sh --list-ports
+./run.sh --list-services
+./run.sh --check-ssh
+```
+
+---
+
+### Notes for macOS Development
+
+This project is designed for Linux servers, but it can be developed and tested on macOS.
+
+On macOS:
+
+- System resource monitoring works normally
+- Telegram alerts work if Telegram API is reachable
+- Port checking uses an `lsof` fallback when `psutil` cannot access network connections
+- Service checks are skipped because `systemctl` is not available
+- SSH log analysis can be tested using a sample log file
+
+Example local development configuration:
+
+```env
+SSH_LOG_PATH=sample_logs/auth.log
+SSH_FAILED_THRESHOLD=10
+ALLOWED_PORTS=22,80,443,49169,57113
+CHECK_INTERVAL_SECONDS=60
+```
+
+For real Linux servers, use stricter production values.
+
+---
+
+### Notes for Linux Server Deployment
+
+On a Linux server, the watcher can monitor real services and SSH authentication
+
+---
 
 ## Example Alerts
 
