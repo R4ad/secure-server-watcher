@@ -257,6 +257,7 @@ ALLOWED_PORTS=22,80,443
 SERVICES_TO_CHECK=ssh,nginx,docker
 
 ALERT_COOLDOWN_SECONDS=1800
+CHECK_INTERVAL_SECONDS=60
 ```
 
 ---
@@ -379,6 +380,16 @@ This helps prevent alert spam.
 
 ---
 
+### CHECK_INTERVAL_SECONDS
+
+The interval between monitoring checks when the watcher runs in loop mode.
+
+Example:
+
+```env
+CHECK_INTERVAL_SECONDS=60
+
+---
 ## Usage
 
 Run the watcher manually:
