@@ -19,6 +19,7 @@ The project focuses on real-world defensive security tasks such as:
 - Identifying suspicious IP addresses
 - Checking open ports against an allowed list
 - Sending Telegram alerts for important security or availability events
+- Preventing repeated alert spam with cooldown logic
 
 This project is built as a learning-focused and resume-ready security automation tool.
 
@@ -41,6 +42,7 @@ This project helps improve practical skills in:
 - Telegram-based alerting
 - Secure environment-based configuration
 - Structured logging
+- Basic alert cooldown design
 
 ---
 
@@ -48,7 +50,7 @@ This project helps improve practical skills in:
 
 ### System Monitoring
 
-Secure Server Watcher can monitor basic server health metrics such as:
+Secure Server Watcher monitors basic server health metrics such as:
 
 - CPU usage
 - RAM usage
@@ -61,18 +63,19 @@ These checks help detect resource exhaustion before it causes downtime.
 
 ### SSH Security Monitoring
 
-The tool is designed to analyze SSH authentication activity and detect suspicious login behavior.
+The tool analyzes SSH authentication activity and detects suspicious login behavior.
 
-Planned SSH monitoring features include:
+SSH monitoring features include:
 
 - Failed SSH login attempt detection
 - Top IP addresses with failed attempts
 - Successful SSH login overview
 - Basic brute-force detection logic
+- Configurable failed-login threshold
 
 Example use case:
 
-If one IP address fails SSH login many times in a short period, the tool can send a Telegram alert.
+If one IP address or multiple IP addresses cause many failed SSH login attempts, the tool can send a Telegram alert.
 
 ---
 
@@ -100,7 +103,7 @@ If one of these services stops unexpectedly, the tool can send an alert.
 
 ### Open Port Checking
 
-The tool can check listening ports and compare them against an allowed list.
+The tool checks listening ports and compares them against an allowed list.
 
 Example allowed ports:
 
@@ -118,6 +121,8 @@ Detected ports: 22, 80, 443, 8080
 
 Suspicious port detected: 8080
 ```
+
+On macOS, the tool can use an `lsof` fallback when `psutil` cannot access network connections.
 
 ---
 
@@ -145,6 +150,32 @@ Threshold: 85%
 Time: 2026-05-03 18:45
 ```
 
+Telegram errors are logged safely without exposing the bot token.
+
+---
+
+### Alert Cooldown
+
+The watcher includes cooldown logic to reduce repeated alert spam.
+
+For example, if the same issue continues to exist, the tool can skip repeated Telegram alerts until the configured cooldown period expires.
+
+```env
+ALERT_COOLDOWN_SECONDS=1800
+```
+
+---
+
+### Loop Mode
+
+The watcher can run once or continuously.
+
+Loop mode allows the tool to perform checks repeatedly using a configured interval.
+
+```env
+CHECK_INTERVAL_SECONDS=60
+```
+
 ---
 
 ## Project Structure
@@ -161,10 +192,17 @@ secure-server-watcher/
 │   ├── port_checker.py
 │   ├── service_checker.py
 │   ├── telegram_alert.py
+│   ├── alert_cooldown.py
 │   └── logger.py
 │
+├── deployment/
+│   └── secure-server-watcher.service.example
+│
 ├── logs/
-│   └── watcher.log
+│   └── .gitkeep
+│
+├── sample_logs/
+│   └── auth.log
 │
 ├── .env.example
 ├── requirements.txt
@@ -184,6 +222,7 @@ secure-server-watcher/
 - Linux system commands
 - Telegram Bot API
 - Logging
+- Bash script runner
 
 ---
 
@@ -216,6 +255,12 @@ cp .env.example .env
 ```
 
 Edit `.env` and add your own configuration.
+
+Make the run script executable:
+
+```bash
+chmod +x run.sh
+```
 
 ---
 
@@ -252,6 +297,7 @@ RAM_THRESHOLD=85
 DISK_THRESHOLD=85
 
 SSH_FAILED_THRESHOLD=10
+SSH_LOG_PATH=/var/log/auth.log
 
 ALLOWED_PORTS=22,80,443
 SERVICES_TO_CHECK=ssh,nginx,docker
@@ -259,6 +305,8 @@ SERVICES_TO_CHECK=ssh,nginx,docker
 ALERT_COOLDOWN_SECONDS=1800
 CHECK_INTERVAL_SECONDS=60
 ```
+
+Never commit your real `.env` file to GitHub.
 
 ---
 
@@ -342,6 +390,24 @@ SSH_FAILED_THRESHOLD=10
 
 ---
 
+### SSH_LOG_PATH
+
+The path to the SSH authentication log file.
+
+On Ubuntu/Debian servers, this is usually:
+
+```env
+SSH_LOG_PATH=/var/log/auth.log
+```
+
+For local development on macOS, a sample log file can be used:
+
+```env
+SSH_LOG_PATH=sample_logs/auth.log
+```
+
+---
+
 ### ALLOWED_PORTS
 
 A comma-separated list of ports that are expected to be open.
@@ -351,6 +417,8 @@ Example:
 ```env
 ALLOWED_PORTS=22,80,443
 ```
+
+Any detected listening port outside this list can trigger a suspicious port alert.
 
 ---
 
@@ -363,6 +431,8 @@ Example:
 ```env
 SERVICES_TO_CHECK=ssh,nginx,docker
 ```
+
+On Linux, these services are checked with `systemctl`.
 
 ---
 
@@ -382,34 +452,16 @@ This helps prevent alert spam.
 
 ### CHECK_INTERVAL_SECONDS
 
-The interval between monitoring checks when the watcher runs in loop mode.
+The interval between checks when running in loop mode.
 
 Example:
 
 ```env
 CHECK_INTERVAL_SECONDS=60
-
----
-
-## Usage
-
-Run the watcher manually:
-
-```bash
-python app/main.py
-```
-
-Expected example output:
-
-```text
-Server: my-server-1
-CPU Usage: 14%
-RAM Usage: 42%
-Disk Usage: 68%
-Uptime: 5 days, 3 hours
 ```
 
 ---
+
 ## Usage
 
 Secure Server Watcher can be executed using the `run.sh` script.
@@ -609,7 +661,7 @@ SSH_FAILED_THRESHOLD=3
 
 ---
 
-### Notes for macOS Development
+## Notes for macOS Development
 
 This project is designed for Linux servers, but it can be developed and tested on macOS.
 
@@ -634,9 +686,38 @@ For real Linux servers, use stricter production values.
 
 ---
 
-### Notes for Linux Server Deployment
+## Notes for Linux Server Deployment
 
-On a Linux server, the watcher can monitor real services and SSH authentication
+On a Linux server, the watcher can monitor real services, open ports, server resources, and SSH authentication logs.
+
+Recommended production-style configuration:
+
+```env
+SERVER_NAME=vpn-server-1
+
+CPU_THRESHOLD=90
+RAM_THRESHOLD=85
+DISK_THRESHOLD=85
+
+SSH_LOG_PATH=/var/log/auth.log
+SSH_FAILED_THRESHOLD=10
+
+ALLOWED_PORTS=22,80,443
+SERVICES_TO_CHECK=ssh,nginx,docker
+
+ALERT_COOLDOWN_SECONDS=1800
+CHECK_INTERVAL_SECONDS=60
+```
+
+Depending on your server setup, you may need permission to read SSH authentication logs.
+
+On Ubuntu/Debian, SSH logs are usually stored at:
+
+```text
+/var/log/auth.log
+```
+
+The watcher should only be used on servers you own or are authorized to monitor.
 
 ---
 
@@ -645,24 +726,32 @@ On a Linux server, the watcher can monitor real services and SSH authentication
 ### High RAM Usage
 
 ```text
-⚠️ High RAM Usage
+⚠️ Secure Server Watcher Alert
 
 Server: my-server-1
-RAM Usage: 91%
-Threshold: 85%
 Time: 2026-05-03 18:45
+
+Alert: High RAM Usage
+Metric: RAM
+Current Value: 91.0%
+Threshold: 85%
 ```
+
+---
 
 ### Critical Service Down
 
 ```text
-🚨 Service Down
+🚨 Critical Service Down
 
 Server: my-server-1
+Time: 2026-05-03 18:45
+
 Service: nginx
 Status: inactive
-Time: 2026-05-03 18:45
 ```
+
+---
 
 ### Suspicious SSH Activity
 
@@ -670,10 +759,17 @@ Time: 2026-05-03 18:45
 🚨 Suspicious SSH Activity
 
 Server: my-server-1
-Failed Login Attempts: 27
-Top IP: 203.0.113.10
 Time: 2026-05-03 18:45
+
+Failed Attempts: 27
+Threshold: 10
+
+Top Failed IPs:
+- 203.0.113.10: 18 failed attempts
+- 198.51.100.55: 9 failed attempts
 ```
+
+---
 
 ### Suspicious Open Port
 
@@ -681,23 +777,28 @@ Time: 2026-05-03 18:45
 ⚠️ Suspicious Open Port Detected
 
 Server: my-server-1
-Port: 8080
-Allowed Ports: 22, 80, 443
 Time: 2026-05-03 18:45
+
+Port: 8080
+Address: 0.0.0.0:8080
+Process: unknown
+Allowed Ports: 22, 80, 443
 ```
 
 ---
 
 ## Development Roadmap
 
-- [ ] Create initial project structure
-- [ ] Add system resource monitoring
-- [ ] Add Telegram alert integration
-- [ ] Add structured logging
-- [ ] Add service status checks
-- [ ] Add SSH log analysis
-- [ ] Add open port detection
-- [ ] Add alert cooldown system
+- [x] Create initial project structure
+- [x] Add system resource monitoring
+- [x] Add Telegram alert integration
+- [x] Add structured logging
+- [x] Add service status checks
+- [x] Add SSH log analysis
+- [x] Add open port detection
+- [x] Add alert cooldown system
+- [x] Add loop mode
+- [x] Add run script
 - [ ] Add Linux deployment guide
 - [ ] Add systemd service support
 - [ ] Add Docker support
@@ -728,6 +829,7 @@ Secure Server Watcher helps detect or monitor:
 - Suspicious SSH login attempts
 - Unexpected open ports
 - Basic signs of brute-force activity
+- Repeated alert conditions with cooldown handling
 
 ---
 
@@ -743,6 +845,20 @@ This tool does not:
 - Replace professional incident response
 
 It is a lightweight defensive monitoring tool.
+
+---
+
+## Runtime Files
+
+The following files are generated during execution and should not be committed to GitHub:
+
+```text
+logs/watcher.log
+logs/alert_state.json
+.env
+```
+
+Use `.gitignore` to keep sensitive and runtime files out of the repository.
 
 ---
 
@@ -769,13 +885,13 @@ Potential future features:
 **Secure Server Watcher – Python Security Automation Tool**
 
 Developed a Python-based Linux server monitoring tool with Telegram alerts.  
-Implemented system resource monitoring, SSH log analysis, service health checks, open port detection, environment-based configuration, and structured logging for defensive server security.
+Implemented system resource monitoring, SSH log analysis, service health checks, open port detection, environment-based configuration, alert cooldown logic, loop mode, and structured logging for defensive server security.
 
 ---
 
 ## Status
 
-Currently under development.
+MVP under active development.
 
 ---
 
