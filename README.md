@@ -378,7 +378,6 @@ ALERT_COOLDOWN_SECONDS=1800
 
 This helps prevent alert spam.
 
----
 
 ### CHECK_INTERVAL_SECONDS
 
@@ -390,6 +389,7 @@ Example:
 CHECK_INTERVAL_SECONDS=60
 
 ---
+
 ## Usage
 
 Run the watcher manually:
